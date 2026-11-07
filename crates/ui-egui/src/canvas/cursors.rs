@@ -164,11 +164,7 @@ pub(crate) fn color_sampler_cursor(ctx: &egui::Context, p: Pos2) -> egui::Cursor
     // around (5, 5), which is offset by (3, -17) * (20/24) = (2.5, -14.17) from the tip.
     let target_center = p + vec2(2.5, -14.0);
     let rect = Rect::from_center_size(target_center, egui::Vec2::splat(size));
-    let area = egui::Area::new(egui::Id::unique("pc-sampler-badge"))
-        .order(egui::Order::Tooltip)
-        .fixed_pos(rect.min)
-        .constrain(false)
-        .interactable(false);
+    let area = egui::Area::new(egui::Id::unique("pc-sampler-badge")).order(egui::Order::Tooltip).fixed_pos(rect.min).constrain(false).interactable(false);
     area.show(ctx, |ui| {
         let outline = crate::icons::image("sampler", size, Color32::from_black_alpha(200));
         for (dx, dy) in [(-1.0, 0.0), (1.0, 0.0), (0.0, -1.0), (0.0, 1.0), (-1.0, -1.0), (1.0, 1.0), (-1.0, 1.0), (1.0, -1.0)] {
