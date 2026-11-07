@@ -242,7 +242,7 @@ fn save_for_web_impl(s: &mut Session, p: &Value, write: &mut dyn FnMut(&str, &[u
     let xmp = web_xmp(&doc, st.metadata);
     let exif = web_exif(&doc, st.metadata);
     let dpi = wdoc.resolution_dpi;
-    let warnings = web_warnings(&st, exif, dpi);
+    let warnings = web_warnings(&st, exif, xmp.as_deref(), dpi);
     let all = slices::resolve(&doc);
     let picked = |r: &ResolvedSlice| match &pick {
         SlicePick::Numbers(n) => n.contains(&(r.number as u64)),
