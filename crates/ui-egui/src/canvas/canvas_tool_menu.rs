@@ -411,6 +411,29 @@ pub const NO_SELECTION_MENU: &[Row] = &[
     Some(("Load Selection…", "select.loadSelection")),
 ];
 
+/// The Count tool's canvas menu (#11772): Photoshop's generic layer menu, on a marker or off one,
+/// in its order for a pixel layer without a selection. Each row is enabled as the Layers panel
+/// menu enables it for the active layer (`menus::is_enabled`) and runs like the menu item.
+pub const COUNT_MENU: &[Row] = &[
+    Some(("Blending Options…", "layer.layerStyle.blendingOptions")),
+    None,
+    Some(("Duplicate Layer…", "layer.duplicate")),
+    Some(("Delete Layer", "layer.delete")),
+    Some(("Group from Layers…", "layer.new.groupFromLayers")),
+    None,
+    Some(("Convert to Smart Object", "layer.smartObjects.convertToSmartObject")),
+    Some(("Convert to Layers", "layer.smartObjects.convertToLayers")),
+    None,
+    Some(("Rasterize Layer", "layer.rasterize.layer")),
+    Some(("Rasterize Layer Style", "layer.rasterize.layerStyle")),
+    None,
+    Some(("Free Transform", "edit.freeTransform")),
+    None,
+    Some(("Color Range…", "select.colorRange")),
+    Some(("Load Selection…", "select.loadSelection")),
+    Some(("Reselect", "select.reselect")),
+];
+
 /// Photoshop's Pen context menu order. Rows whose operation is not applicable to the current
 /// path or layer stay visible and disabled.
 pub const PEN_MENU: &[Row] = &[
@@ -461,6 +484,8 @@ pub fn applies(tool: Tool) -> bool {
             // Its brush is set from the options bar's chip; the canvas right-click is the
             // selection menu, as in Photoshop (#7268).
             | Tool::QuickSelection
+            // The layer menu (#11772).
+            | Tool::Count
     ) || path_menu(tool)
 }
 
@@ -510,6 +535,8 @@ pub fn rows(menu: &CanvasToolMenu) -> &'static [Row] {
         TYPE_LAYER_MENU
     } else if path_menu(menu.tool) {
         PEN_MENU
+    } else if menu.tool == Tool::Count {
+        COUNT_MENU
     } else {
         selection_rows(menu.has_selection)
     }
@@ -1226,3 +1253,6 @@ pub fn show(app: &mut PhotocraftApp, ctx: &Context) {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod count_tests;
