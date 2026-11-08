@@ -782,7 +782,7 @@ fn tilde_held_with_the_brush_or_pencil_erases_with_its_brush() {
         drag_with(&mut h, Modifiers::NONE, 110.0, 130.0, 150.0, 130.0);
         key(&mut h, Key::Backtick, false, Modifiers::NONE);
         assert_eq!(last_stroke_erases(&h), Some(true), "{tool:?}");
-        assert_eq!(rgba(&h, 130, 130)[3], 0.0, "{tool:?}: erased to transparency");
+        assert_eq!(rgba(&h, 110, 130)[3], 0.0, "{tool:?}: erased to transparency");
         assert_eq!(last_stroke(h.state())["mode"], json!("clear"), "{tool:?}");
         assert_eq!(h.state().session.active().unwrap().history.undo_label(), Some(label));
         assert_eq!(h.state().ui.tool, tool, "the tool stays");
