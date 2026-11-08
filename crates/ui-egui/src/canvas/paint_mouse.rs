@@ -41,6 +41,8 @@ pub fn sync_tool_brush(app: &mut PhotocraftApp) {
         // in Normal mode: each tool's Mode starts at Normal, so a Multiply Brush doesn't make the
         // first Clone Stamp stroke multiply (or give Healing a mode its menu doesn't have).
         // The Art History Brush also starts at full opacity (#10263): its Opacity is its own.
+        // The Pencil starts with its own 1 px hard tip (#12200), whatever the Brush had.
+        None if tool == Tool::Pencil => BrushSettings { opacity: current.opacity, ..fresh_brush(tool, &current) },
         None => {
             let opacity = if tool == Tool::ArtHistoryBrush { BrushSettings::default().opacity } else { current.opacity };
             BrushSettings { smoothing: first_smoothing(), mode: photocraft_color::BlendMode::Normal, opacity, ..current }
@@ -71,13 +73,19 @@ fn session_fields(current: &BrushSettings, brush: &BrushSettings) -> BrushSettin
 /// and spacing of a 13 px soft round at 25 % spacing.
 const BRUSH_TOOL_TIP: (f32, f32, f32) = (13.0, 0.0, 0.25);
 
+/// The Pencil tool's starting and Reset Tool tip, as the reference measures it (#12200): size,
+/// hardness and spacing of a 1 px hard round at 25 % spacing.
+const PENCIL_TOOL_TIP: (f32, f32, f32) = (1.0, 1.0, 0.25);
+
 /// `tool`'s brush as it starts out (Reset Tool, #2825): the default brush at Photoshop's
-/// smoothing, with the session's own fields of `current`. The Brush tool's tip is
-/// [`BRUSH_TOOL_TIP`]; the other tools keep the default tip.
+/// smoothing, with the session's own fields of `current`. The Brush and Pencil tools have their
+/// own tips ([`BRUSH_TOOL_TIP`], [`PENCIL_TOOL_TIP`]); the other tools keep the default tip.
 pub(crate) fn fresh_brush(tool: Tool, current: &BrushSettings) -> BrushSettings {
     let mut brush = BrushSettings { smoothing: first_smoothing(), ..BrushSettings::default() };
-    if tool == Tool::Brush {
-        (brush.size, brush.hardness, brush.spacing) = BRUSH_TOOL_TIP;
+    match tool {
+        Tool::Brush => (brush.size, brush.hardness, brush.spacing) = BRUSH_TOOL_TIP,
+        Tool::Pencil => (brush.size, brush.hardness, brush.spacing) = PENCIL_TOOL_TIP,
+        _ => {}
     }
     session_fields(current, &brush)
 }
@@ -522,3 +530,7 @@ pub fn show_picker(app: &mut PhotocraftApp, ctx: &egui::Context) {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+#[path = "../pencil_reset_defaults_tests.rs"]
+mod pencil_reset_defaults_tests;
