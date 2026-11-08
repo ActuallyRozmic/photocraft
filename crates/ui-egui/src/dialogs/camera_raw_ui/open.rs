@@ -30,6 +30,9 @@ pub struct RawOpen {
     pub developed_with: photocraft_io::raw::Demosaic,
     /// The method chosen in the dialog: Open re-develops when it differs from `developed_with`.
     pub demosaic: photocraft_io::raw::Demosaic,
+    /// The file decoded once for the dialog's preview and for Open's re-develop (the sensor data
+    /// is 2 bytes per pixel): freed with the last copy of this, when the dialog closes.
+    pub decoded: Option<std::sync::Arc<photocraft_io::raw::RawDecode>>,
 }
 
 /// Should an interactive open of `name` show the open-time Camera Raw dialog? `warnings` are
@@ -53,7 +56,7 @@ pub fn queue_open_dialog(
     document: photocraft_doc::DocId,
     name: &str,
     path: Option<&str>,
-    bytes: Option<&[u8]>,
+    bytes: Option<&std::sync::Arc<Vec<u8>>>,
     warnings: &[String],
 ) -> Result<(), String> {
     if document_index(app, document).is_none() {
@@ -69,9 +72,10 @@ pub fn queue_open_dialog(
         document,
         name: name.to_string(),
         path: path.map(str::to_string),
-        bytes: bytes.map(|b| std::sync::Arc::new(b.to_vec())),
+        bytes: bytes.cloned(),
         developed_with: method,
         demosaic: method,
+        decoded: None,
     };
     let held = super::filmstrip::HeldRaw::new(app, raw);
     app.raw_shelf.push(held);
@@ -128,13 +132,22 @@ pub(super) fn open_raw_with(app: &mut PhotocraftApp, ctx: &egui::Context, raw: R
     Ok(())
 }
 
-/// Gives the open dialog its raw: the file name, and the camera tone curve it was developed with.
-fn attach_raw(app: &mut PhotocraftApp, raw: RawOpen) {
-    let curve = match (&raw.bytes, &raw.path) {
-        (Some(b), _) => Some(photocraft_io::raw::tone_curve(b)),
+/// Gives the open dialog its raw: the file name, the camera tone curve it was developed with, and
+/// the decode (the open's kept one, else one made now) the preview and Open's re-develop share.
+fn attach_raw(app: &mut PhotocraftApp, mut raw: RawOpen) {
+    let file = match (&raw.bytes, &raw.path) {
+        _ if raw.decoded.is_some() => None,
+        (Some(b), _) => Some(std::borrow::Cow::Borrowed(b.as_slice())),
         #[cfg(not(target_arch = "wasm32"))]
-        (None, Some(p)) => std::fs::read(p).ok().map(|b| photocraft_io::raw::tone_curve(&b)),
+        (None, Some(p)) => std::fs::read(p).ok().map(std::borrow::Cow::Owned),
         _ => None,
+    };
+    let curve = match file {
+        Some(b) => {
+            raw.decoded = photocraft_io::raw::take_kept_decode(&b).or_else(|| photocraft_io::raw::RawDecode::new(&b).ok().map(std::sync::Arc::new));
+            Some(raw.decoded.as_ref().map(|d| d.tone_curve().to_vec()).unwrap_or_default())
+        }
+        None => raw.decoded.as_ref().map(|d| d.tone_curve().to_vec()),
     };
     if let Some(d) = app.camera_raw.as_mut() {
         d.layer_name = raw.name.clone();
@@ -223,7 +236,7 @@ pub(super) fn commit_open_raw(app: &mut PhotocraftApp, params: &CameraRaw, raw: 
         return finish_open_raw(app, index, params.clone(), None, raw, &defaults);
     };
     app.session.set_active(index);
-    let (name, doc_id) = (raw.name.clone(), raw.document);
+    let (name, doc_id, decoded) = (raw.name.clone(), raw.document, raw.decoded.clone());
     let work = move |ctx: &photocraft_engine::jobs::JobCtx| -> photocraft_engine::Result<(photocraft_io::ImportResult, bool)> {
         ctx.progress(0.0, "Reading");
         let bytes = match source {
@@ -237,7 +250,11 @@ pub(super) fn commit_open_raw(app: &mut PhotocraftApp, params: &CameraRaw, raw: 
         };
         ctx.check()?;
         ctx.progress(0.05, "Developing");
-        photocraft_io::raw::import_raw_tuned(&name, &bytes, &tuning).map_err(|e| photocraft_engine::EngineError::Other(e.to_string()))
+        match &decoded {
+            Some(d) => photocraft_io::raw::import_raw_tuned_from(&name, &bytes, &tuning, d),
+            None => photocraft_io::raw::import_raw_tuned(&name, &bytes, &tuning),
+        }
+        .map_err(|e| photocraft_engine::EngineError::Other(e.to_string()))
     };
     let apply = move |s: &mut photocraft_engine::Session, (r, wb): (photocraft_io::ImportResult, bool)| replace_raw_document(s, doc_id, r, wb);
     let label = crate::i18n::fmt(tl!("Developing {name}"), &[("name", &raw.name)]);
@@ -387,7 +404,8 @@ pub fn opened_without_dialog(app: &mut PhotocraftApp, index: usize, name: &str, 
     }
     let Some(document) = app.session.documents().get(index).map(|st| st.doc.id) else { return };
     let method = photocraft_io::raw::developed_demosaic(warnings).unwrap_or_else(|| app.session.prefs().raw_defaults.demosaic.method());
-    let raw = RawOpen { document, name: name.to_string(), path: path.map(str::to_string), bytes: None, developed_with: method, demosaic: method };
+    let raw =
+        RawOpen { document, name: name.to_string(), path: path.map(str::to_string), bytes: None, decoded: None, developed_with: method, demosaic: method };
     let mut params = CameraRaw::default();
     let sidecar = path.and_then(read_sidecar).map(|(loaded, _, _)| loaded);
     if let Some(loaded) = &sidecar {
